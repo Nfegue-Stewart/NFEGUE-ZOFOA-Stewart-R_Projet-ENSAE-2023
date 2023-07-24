@@ -1,0 +1,469 @@
+---
+title: "PROJET LOGICIEL STATISTIQUES R"
+author: "NFEGUE ZOFOA Stewart"
+output: word_document
+  
+---
+
+
+
+
+
+
+
+PARTIE1
+
+
+
+Importation et mise en forme
+
+
+Importation de la base de données
+
+```{r}
+library(readxl)
+
+# Importer la base de données Excel
+projet <- read_excel("Base_Partie 1.xlsx")
+
+
+```
+
+
+
+
+
+Faites un tableau qui resume les valeurs manquantes par variable
+
+```{r}
+# Calcul du nombre de valeurs manquantes par variable
+valeurs_manquantes <- colSums(is.na(projet))
+
+# Création du tableau résumant les valeurs manquantes
+tableau_valeurs_manquantes <- data.frame(Variable = names(valeurs_manquantes), Valeurs_Manquantes = valeurs_manquantes)
+
+# Affichage du tableau résumant les valeurs manquantes
+print(tableau_valeurs_manquantes)
+
+
+
+```
+
+
+
+
+
+
+
+Vérifier s'il y a les des valeurs manquantes pour la variable key
+
+```{r}
+# D'après le tableau_valeurs_manquantes, la variable KEY n'a aucune valeur manquante.
+
+```
+
+
+
+
+CREATION DES VARIABLES
+
+Renommer les variables
+```{r}
+# Renommer les variables
+#Renommer la variable "q1" en "region"
+ colnames(projet)[colnames(projet) == "q1"] <- "region"
+ print(projet)
+ 
+#Renommer la variable "q2" en "departement"
+ colnames(projet)[colnames(projet) == "q2"] <- "departement"
+ print(projet)
+ 
+#Renommer la variable "q23" en "sexe"
+ colnames(projet)[colnames(projet) == "q23"] <- "sexe"
+ print(projet)
+
+```
+
+
+
+
+Créer la variable sexe_2
+```{r}
+#Avec la fonction ifelse, on peut coder la variable femme en 1 et si c'est un homme, ça donne la valeur 0
+
+ projet$sexe_2 <- ifelse(projet$sexe == "Femme", 1,0)
+
+```
+
+
+
+Créer un dataframe nommé langues
+```{r}
+library(dplyr)
+langues = select(projet,key,starts_with("q24a_"))%>%data.frame()
+#la fonction starts_with permet de prendre les variables qui commencent par "q24a_"
+
+
+```
+
+
+Créer une variable parle égale au nombre de langues parlée par le dirigeant
+```{r}
+library(dplyr)
+
+projet <- projet%>%
+  mutate(parle = rowSums(across(starts_with("q24a_")) > 0))
+
+#la fonction mutate permet d'ajouter la variable parle à la base projet et tient compte du nombre des langues parlées par le dirigeant
+
+```
+
+
+
+Sélectionner les variables key et parle, l'objet de reetour sera langues
+```{r}
+library(dplyr)
+langues <- projet %>%
+  select(key, parle)
+
+```
+
+
+Merger les data.frame projet et langues
+```{r}
+library(dplyr)
+
+ merge_df <- merge(projet, langues, by = "row.names")
+
+```
+
+
+
+
+ANALYSES DESCRIPTIVES
+
+Le but de ces codes est de pouvoir faire les analyses descriptives de certaines variables par filière. 
+Pour chaque filière, on recense les PME engagée d'où (filiere_1 ==1 par exemple qui prend les PME dans la filière 1)
+Ensuite, on choisit les variables concernées avec la fonction select de dplyr et on fait des statistiques par rapport à chaque filiere avec la fonction tbl_summary.
+ A la fin, on merge les tableaux pour une seule sortie
+
+
+```{r}
+
+# Charger les packages nécessaires
+library(dplyr)
+library(gtsummary)
+
+F1<- subset(projet,filiere_1==1)%>%
+dplyr::select(sexe_2,q25,q12,q81,filiere_1)%>%
+gtsummary::tbl_summary(
+   by= filiere_1,
+   statistic=list(
+     all_categorical() ~ "{n} / {N} ({p}%)"
+   ),
+   missing = "no",
+   percent="column"
+)%>%
+  modify_header(label ~ "**variable**" )%>%
+bold_labels()
+   
+
+F2<- subset(projet,filiere_2==1)%>%
+dplyr::select(sexe_2,q25,q12,q81,filiere_2)%>%
+gtsummary::tbl_summary(
+   by= filiere_2,
+   statistic=list(
+     all_categorical() ~ "{n} / {N} ({p}%)"
+   ),
+   missing = "no",
+   percent="column"
+)%>%
+  modify_header(label ~ "**variable**" )%>%
+bold_labels()
+
+F3<- subset(projet,filiere_3==1)%>%
+dplyr::select(sexe_2,q25,q12,q81,filiere_3)%>%
+gtsummary::tbl_summary(
+   by= filiere_3,
+   statistic=list(
+     all_categorical() ~ "{n} / {N} ({p}%)"
+   ),
+   missing = "no",
+   percent="column"
+)%>%
+  modify_header(label ~ "**variable**" )%>%
+bold_labels()
+
+F4<- subset(projet,filiere_4==1)%>%
+dplyr::select(sexe_2,q25,q12,q81,filiere_4)%>%
+gtsummary::tbl_summary(
+   by= filiere_4,
+   statistic = list(
+     all_categorical()~  "{n} / {N} ({p}%)"
+   ),
+   missing = "no",
+   percent="column"
+)%>%
+  modify_header(label ~ "**variable**" )%>%
+bold_labels()
+
+
+filiere <- tbl_merge(list(F1, F2, F3, F4))
+filiere
+```
+
+
+
+
+
+Un peu de cartographie
+```{r}
+#importation des bibliothèques
+
+library(ggplot2)
+library(sf)
+library(st)
+
+```
+
+
+
+
+Transformer le data.frame en données géographiques dont l’objet sera nommé projet_map.
+```{r}
+senegal <- st_read("gadm41_SEN_0.shp")
+projet_map<- st_as_sf(projet,coords=c("gps_menlongitude","gps_menlatitude"),crs=st_crs(senegal))
+projet_map<- st_join(projet_map,senegal)
+projet_map
+
+```
+
+
+
+
+Faites une réprésentation spatiale des PME suivant le sexe
+```{r}
+library(ggplot2)
+library(sf)
+ggplot(projet)+geom_sf(data=senegal)+geom_point(aes(x=gps_menlongitude, y=gps_menlatitude, color= sexe_2))+ labs (title= "répresentation spatiale des PME suivant le sexe", x="gps_menlongitude", y="gps_menlatitude")+ theme_classic()
+```
+
+
+
+Faites une représentation spatiale suivant le niveau d'instruction
+```{r}
+ggplot(projet)+geom_sf(data=senegal)+geom_point(aes(x=gps_menlongitude, y=gps_menlatitude,color=q25))+ labs(title="representation spatiale des PME suivant le niveau d'instruction", x="gps_menlongitude",y= "gps_menlatitude")+theme_classic()
+
+```
+
+
+Faites une représentation spatiale suivant l'âge des dirigeants
+```{r}
+ggplot(projet)+geom_sf(data=senegal)+geom_point(aes(x=gps_menlongitude, y=gps_menlatitude,color=q24))+ labs(title="representation spatiale des PME suivant l'age des dirigeants", x="gps_menlongitude",y= "gps_menlatitude")+theme_classic()
+```
+
+
+
+
+
+
+
+PARTIE2
+
+Nettoyage et gestion des données
+
+Importation de la base
+
+Importation du fichier data
+```{r}
+library(readxl)
+# Importer un fichier Excel
+data <- read_excel("Base_Partie 2.xlsx", sheet = "data")
+
+```
+
+
+
+Importation du fichier district
+```{r}
+library(readxl)
+district <- read_excel("Base_Partie 2.xlsx", sheet = "district")
+```
+
+
+
+
+Importation du fichier codebook
+```{r}
+library(readxl)
+codebook <- read_excel("Base_Partie 2.xlsx", sheet = "codebook")
+```
+
+
+
+
+Renommer la variable “country_destination” en “destination” et définir les valeurs négatives comme manquantes.
+```{r}
+library(dplyr)
+
+# Renommer la variable "country_destination" en "destination"
+data <- data %>% rename(destination = country_destination)
+
+# Définir les valeurs négatives comme manquantes
+data[data < 0] <- NA
+
+```
+
+
+
+
+
+Créer une nouvelle variable contenant des tranches d’âge de 5 ans en utilisant la variable “age”.
+
+la fonction cut permet de découper l'âge en tranche de 5 et la fonction breaks arrête lorsque le découpage en tranche de 5 a été atteint. Mutate permet de mettre la variable tranche_age dans la base data
+
+```{r}
+library(dplyr)
+
+# Créer une nouvelle variable avec des tranches d'âge de 5 ans
+data <- data %>% 
+  mutate(tranche_age = cut(age, breaks = seq(0, max(age) + 5, by = 5), labels = FALSE, right = FALSE))
+
+
+```
+
+
+
+
+
+
+Créer une nouvelle variable contenant le nombre d’entretiens réalisés par chaque agent recenseur.
+```{r}
+library(dplyr)
+
+# Créer une nouvelle variable contenant le nombre d'entretiens réalisés par chaque agent recenseur
+data <- data %>% 
+  group_by(enumerator) %>% 
+  mutate(nombre_entretiens = n())
+
+# La nouvelle variable "nombre_entretiens" contiendra le nombre d'entretiens réalisés par chaque agent recenseur.
+
+```
+
+
+Créer une nouvelle variable pour le groupe de traitement (1) ou de contrôle (0)
+```{r}
+library(dplyr)
+# Créer une nouvelle variable pour le groupe de traitement (1) ou de contrôle (0)
+set.seed(109) #Fixer l'aléa
+data$groupe_traitement <- sample(c(0, 1), size = nrow(data), replace = TRUE)
+
+
+# La nouvelle variable "groupe_traitement" contiendra des valeurs aléatoires de 0 ou 1, affectant chaque répondant à un groupe de traitement ou de contrôle.
+
+```
+
+
+
+
+
+Fusionner la taille de la population de chaque district (feuille 2) avec l’ensemble de données (feuille 1) afin que toutes les personnes interrogées aient une valeur correspondante représentant la taille de la population du district dans lequel elles vivent.
+
+
+```{r}
+library(dplyr)
+
+# Fusionner les données en utilisant la fonction left_join() de dplyr
+fused_data <- left_join(data, district, by = "district")
+
+```
+
+
+
+
+
+Calculer la durée de l’entretien et indiquer la durée moyenne de l’entretien par enquêteur.
+```{r}
+library(dplyr)
+
+# Calculer la durée de chaque entretien en minutes
+fused_data <- fused_data %>% 
+  mutate(duree_entretien = difftime(endtime, starttime, units = "mins"))
+
+# Indiquer la durée moyenne de l'entretien par enquêteur
+duree_moyenne_par_enqueteur <- fused_data %>% 
+  group_by(enumerator) %>% 
+  summarise(duree_moyenne_entretien = mean(duree_entretien, na.rm = TRUE))
+
+```
+
+
+
+Renommez toutes les variables de l’ensemble de données en ajoutant le préfixe “endline_” à l’aide d’une boucle.
+```{r}
+
+# Obtenez les noms des colonnes actuels de l'ensemble de données
+noms_colonnes <- colnames(fused_data)
+
+# Créer un nouveau vecteur de noms de colonnes avec le préfixe "endline_"
+noms_colonnes_nouveaux <- paste("endline_", noms_colonnes, sep = "")
+
+# Renommer les colonnes de l'ensemble de données avec les nouveaux noms
+fused_data <- setNames(fused_data, noms_colonnes_nouveaux)
+
+```
+
+ANALYSE ET VISUALISATION DES DONNEES
+
+	Créez un tableau récapitulatif contenant l’âge moyen et le nombre moyen d’enfants par district.
+
+```{r}
+library(dplyr)
+
+# Créer le tableau récapitulatif contenant l'âge moyen et le nombre moyen d'enfants par district
+tabeau_recap <- fused_data %>% 
+  group_by(endline_district) %>% 
+  summarise(endline_age_moyen = mean(endline_age, na.rm = TRUE),
+            endline_nb_enfants_moyen = mean(endline_children_num, na.rm = TRUE))
+
+
+```
+
+
+
+Créer un nuage de points de l’âge en fonction du nombre d’enfants
+```{r}
+library(ggplot2)
+nuage <- data.frame(fused_data$endline_age,fused_data$endline_children_num)
+
+# Créer le nuage de points
+ggplot(nuage, aes(x = fused_data$endline_children_num, y = fused_data$endline_age)) +
+  geom_point() +
+  labs(x = "endline_children_num", y = "endline_age", title = "Nuage de points de l'âge en fonction du nombre d'enfants")
+
+```
+
+
+
+Estimation de l'effet d'appartenance à un groupe
+```{r}
+library(gtsummary)
+library(ggplot2)
+modèle <- stats::lm(fused_data$endline_intention~ fused_data$endline_groupe_traitement, data= fused_data)
+modèle%>% gtsummary::tbl_regression()
+```
+
+
+
+Tableau avec 3 Modèles
+```{r}
+modele_A <- modèle%>%gtsummary::tbl_regression()
+modele_B  <- lm(fused_data$endline_intention ~ fused_data$endline_age+fused_data$endline_sex, data= fused_data)%>%tbl_regression()
+modele_C<- lm(fused_data$endline_intention ~ fused_data$endline_age + fused_data$endline_sex + fused_data$endline_district, fused_data)%>%tbl_regression()
+
+gtsummary::tbl_stack(
+list(modele_A, modele_B, modele_C),
+group_header = c("Modele A","Modele B","Modele C")
+)
+```
+
